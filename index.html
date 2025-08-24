@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AGV 3D Simulator</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900">
+
+    <!-- Main Container -->
+    <div id="app" class="relative w-full h-screen flex flex-col justify-center items-center">
+        <!-- 3D Canvas -->
+        <canvas id="agv-canvas" class="w-full h-full"></canvas>
+
+        <!-- UI Overlay -->
+        <div class="absolute inset-0 flex flex-col justify-between p-4 pointer-events-none">
+            
+            <!-- Sensor Data Display -->
+            <div class="bg-white/80 dark:bg-gray-800/80 backdrop-blur rounded-xl p-4 shadow-lg text-sm text-gray-900 dark:text-gray-100 pointer-events-auto self-start">
+                <h2 class="font-bold mb-2">Sensor Readings (Real-time)</h2>
+                <div id="sensor-display" class="space-y-1">
+                    <p>IR1: <span id="ir1-val">N/A</span></p>
+                    <p>IR2: <span id="ir2-val">N/A</span></p>
+                    <p>Ultra1: <span id="ultra1-val">N/A</span></p>
+                    <p>Ultra2: <span id="ultra2-val">N/A</span></p>
+                    <p>Ultra3: <span id="ultra3-val">N/A</span></p>
+                </div>
+            </div>
+
+            <!-- Manual Control Buttons -->
+            <div class="flex justify-center items-center gap-4 p-4 pointer-events-auto">
+                <div class="flex flex-col items-center">
+                    <button id="forward-btn" class="w-16 h-16 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg transition-transform transform hover:scale-105 active:scale-95">
+                        <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 102 0V6z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                    <p class="mt-2 text-gray-900 dark:text-gray-100">Forward</p>
+                </div>
+                <div class="flex flex-col items-center">
+                    <button id="left-btn" class="w-16 h-16 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg transition-transform transform hover:scale-105 active:scale-95">
+                        <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-5-8a1 1 0 102 0v4a1 1 0 10-2 0v-4zM7 9a1 1 0 112 0v4a1 1 0 11-2 0v-4zM9 10a1 1 0 112 0v4a1 1 0 11-2 0v-4z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                    <p class="mt-2 text-gray-900 dark:text-gray-100">Left</p>
+                </div>
+                <div class="flex flex-col items-center">
+                    <button id="right-btn" class="w-16 h-16 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg transition-transform transform hover:scale-105 active:scale-95">
+                        <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm5-8a1 1 0 10-2 0v4a1 1 0 102 0v-4zM13 9a1 1 0 11-2 0v4a1 1 0 112 0v-4zM11 10a1 1 0 11-2 0v4a1 1 0 112 0v-4z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                    <p class="mt-2 text-gray-900 dark:text-gray-100">Right</p>
+                </div>
+                <div class="flex flex-col items-center">
+                    <button id="backward-btn" class="w-16 h-16 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg transition-transform transform hover:scale-105 active:scale-95">
+                        <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 102 0V6z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                    <p class="mt-2 text-gray-900 dark:text-gray-100">Backward</p>
+                </div>
+                <div class="flex flex-col items-center ml-8">
+                    <button id="stop-btn" class="w-16 h-16 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center shadow-lg transition-transform transform hover:scale-105 active:scale-95">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9h6v6H9z" />
+                        </svg>
+                    </button>
+                    <p class="mt-2 text-gray-900 dark:text-gray-100">Stop</p>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    <script>
+        // Three.js Scene Setup
+        let scene, camera, renderer, agv, manualControls = {
+            forward: false,
+            backward: false,
+            left: false,
+            right: false
+        };
+        const obstacles = {};
+
+        // The maximum distance a sensor can detect an obstacle
+        const OBSTACLE_DIST_THRESHOLD = 5; // A reasonable distance in 3D units
+
+        // Initialize scene
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 10, 20); // Set camera back and up
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({
+                canvas: document.getElementById('agv-canvas'),
+                alpha: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            // Create AGV
+            const agvGeometry = new THREE.BoxGeometry(1.5, 0.5, 2.5);
+            const agvMaterial = new THREE.MeshStandardMaterial({ color: 0x007bff });
+            agv = new THREE.Mesh(agvGeometry, agvMaterial);
+            agv.position.set(0, 0.25, 0); // Position it on the ground
+            scene.add(agv);
+
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(5, 10, 7.5);
+            scene.add(directionalLight);
+
+            // Add a floor grid for perspective
+            const gridHelper = new THREE.GridHelper(100, 100);
+            scene.add(gridHelper);
+
+            // Create obstacle geometries (these are permanent, but their visibility will change)
+            const obstacleGeometry = new THREE.BoxGeometry(3, 3, 3);
+            const obstacleMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000, transparent: true, opacity: 0.8 });
+            
+            // Define fixed obstacle positions in the world
+            obstacles.ir1 = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+            obstacles.ir1.position.set(2, 1.5, -5);
+            obstacles.ir1.name = "ir1";
+            scene.add(obstacles.ir1);
+
+            obstacles.ir2 = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+            obstacles.ir2.position.set(-2, 1.5, -15);
+            obstacles.ir2.name = "ir2";
+            scene.add(obstacles.ir2);
+
+            obstacles.ultra1 = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+            obstacles.ultra1.position.set(5, 1.5, -10);
+            obstacles.ultra1.name = "ultra1";
+            scene.add(obstacles.ultra1);
+
+            obstacles.ultra2 = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+            obstacles.ultra2.position.set(-5, 1.5, -20);
+            obstacles.ultra2.name = "ultra2";
+            scene.add(obstacles.ultra2);
+
+            obstacles.ultra3 = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+            obstacles.ultra3.position.set(0, 4, -3);
+            obstacles.ultra3.name = "ultra3";
+            scene.add(obstacles.ultra3);
+        }
+
+        // Animate the scene
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Update manual controls
+            if (manualControls.forward) agv.translateZ(-0.1);
+            if (manualControls.backward) agv.translateZ(0.1);
+            if (manualControls.left) agv.rotation.y += 0.05;
+            if (manualControls.right) agv.rotation.y -= 0.05;
+
+            // Call the function to fetch and update sensor data
+            updateSensorData();
+
+            // Render the scene
+            renderer.render(scene, camera);
+        }
+        
+        // Asynchronously fetches sensor data from the server
+        async function fetchSensorData() {
+            try {
+                const response = await fetch('http://localhost:5000/sensor_data');
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Could not fetch sensor data:', error);
+                return null;
+            }
+        }
+        
+        // Updates the UI and obstacle visibility based on fetched data
+        async function updateSensorData() {
+            const data = await fetchSensorData();
+            if (data) {
+                document.getElementById('ir1-val').textContent = data.IR1;
+                document.getElementById('ir2-val').textContent = data.IR2;
+                document.getElementById('ultra1-val').textContent = data.Ultra1.toFixed(2);
+                document.getElementById('ultra2-val').textContent = data.Ultra2.toFixed(2);
+                document.getElementById('ultra3-val').textContent = data.Ultra3.toFixed(2);
+                
+                // Set obstacle visibility based on the received data
+                obstacles.ir1.visible = data.IR1 === 1;
+                obstacles.ir2.visible = data.IR2 === 1;
+                obstacles.ultra1.visible = data.Ultra1 < OBSTACLE_DIST_THRESHOLD;
+                obstacles.ultra2.visible = data.Ultra2 < OBSTACLE_DIST_THRESHOLD;
+                obstacles.ultra3.visible = data.Ultra3 < OBSTACLE_DIST_THRESHOLD;
+            }
+        }
+
+        // Set up event listeners for manual controls
+        function setupControls() {
+            const buttons = ['forward', 'backward', 'left', 'right'];
+            buttons.forEach(dir => {
+                const btn = document.getElementById(dir + '-btn');
+                btn.addEventListener('mousedown', () => manualControls[dir] = true);
+                btn.addEventListener('mouseup', () => manualControls[dir] = false);
+                btn.addEventListener('touchstart', () => manualControls[dir] = true);
+                btn.addEventListener('touchend', () => manualControls[dir] = false);
+            });
+
+            // Stop button functionality
+            document.getElementById('stop-btn').addEventListener('click', () => {
+                manualControls.forward = false;
+                manualControls.backward = false;
+                manualControls.left = false;
+                manualControls.right = false;
+            });
+            
+            // Keyboard controls for convenience
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'ArrowUp') manualControls.forward = true;
+                if (event.key === 'ArrowDown') manualControls.backward = true;
+                if (event.key === 'ArrowLeft') manualControls.left = true;
+                if (event.key === 'ArrowRight') manualControls.right = true;
+                if (event.key === ' ') { // Spacebar for stop
+                    manualControls.forward = false;
+                    manualControls.backward = false;
+                    manualControls.left = false;
+                    manualControls.right = false;
+                }
+            });
+            document.addEventListener('keyup', (event) => {
+                if (event.key === 'ArrowUp') manualControls.forward = false;
+                if (event.key === 'ArrowDown') manualControls.backward = false;
+                if (event.key === 'ArrowLeft') manualControls.left = false;
+                if (event.key === 'ArrowRight') manualControls.right = false;
+            });
+        }
+
+        window.onload = () => {
+            init();
+            setupControls();
+            setInterval(updateSensorData, 500); // Fetch data every 0.5 seconds
+            animate();
+        };
+        
+        // Handle window resizing
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

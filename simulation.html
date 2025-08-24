@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Car Control Interface</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* bg-gray-900 */
+        }
+        #simulation-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Allow clicks to pass through */
+        }
+        .ui-element {
+            pointer-events: auto; /* Re-enable pointer events for UI */
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="text-white">
+
+    <!-- This canvas is where the 3D simulation will be rendered -->
+    <canvas id="simulation-canvas"></canvas>
+
+    <!-- Overlay for UI elements like status text and controls -->
+    <div class="overlay flex flex-col justify-between p-4 md:p-6">
+        <!-- Top section for status and info -->
+        <div class="w-full flex justify-between items-start">
+            <div id="status-indicator" class="ui-element bg-gray-800/50 backdrop-blur-sm px-4 py-2 rounded-lg shadow-lg">
+                <p class="font-semibold text-lg">Status: <span id="connection-status" class="text-yellow-400">Connecting...</span></p>
+                <p class="text-sm text-gray-300">Receiving simulated sensor data.</p>
+            </div>
+            <div class="ui-element bg-gray-800/50 backdrop-blur-sm p-3 rounded-lg shadow-lg text-sm text-gray-300 hidden md:block">
+                <h3 class="font-bold text-white mb-2">Controls</h3>
+                <p><span class="font-bold bg-gray-700 px-2 py-1 rounded">W / ↑</span> : Forward</p>
+                <p><span class="font-bold bg-gray-700 px-2 py-1 rounded">S / ↓</span> : Backward</p>
+                <p><span class="font-bold bg-gray-700 px-2 py-1 rounded">A / ←</span> : Turn Left</p>
+                <p><span class="font-bold bg-gray-700 px-2 py-1 rounded">D / →</span> : Turn Right</p>
+            </div>
+        </div>
+
+        <!-- Bottom section for manual controls -->
+        <div class="w-full flex justify-center items-end">
+            <div class="ui-element grid grid-cols-3 gap-2 md:gap-4 max-w-xs">
+                <div></div>
+                <button id="forward-btn" class="bg-blue-600/70 backdrop-blur-sm hover:bg-blue-500/80 transition-colors duration-200 rounded-lg p-4 shadow-lg active:scale-95">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" /></svg>
+                </button>
+                <div></div>
+                <button id="left-btn" class="bg-blue-600/70 backdrop-blur-sm hover:bg-blue-500/80 transition-colors duration-200 rounded-lg p-4 shadow-lg active:scale-95">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+                </button>
+                <button id="backward-btn" class="bg-blue-600/70 backdrop-blur-sm hover:bg-blue-500/80 transition-colors duration-200 rounded-lg p-4 shadow-lg active:scale-95">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                <button id="right-btn" class="bg-blue-600/70 backdrop-blur-sm hover:bg-blue-500/80 transition-colors duration-200 rounded-lg p-4 shadow-lg active:scale-95">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Basic Setup ---
+        const canvas = document.getElementById('simulation-canvas');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0x404040, 2); // Soft ambient light
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        directionalLight.position.set(5, 10, 7.5);
+        directionalLight.castShadow = true;
+        scene.add(directionalLight);
+        
+        // --- Scene Objects ---
+        const obstacles = [];
+        const carGroup = new THREE.Group(); // Group to hold car parts
+
+        // Ground plane
+        const groundGeometry = new THREE.PlaneGeometry(500, 500);
+        const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x222f3e, side: THREE.DoubleSide });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // Grid helper
+        const gridHelper = new THREE.GridHelper(500, 50, 0x444444, 0x444444);
+        scene.add(gridHelper);
+
+        // Car Body
+        const carBodyGeometry = new THREE.BoxGeometry(1, 0.4, 2);
+        const carBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x0077ff });
+        const carBody = new THREE.Mesh(carBodyGeometry, carBodyMaterial);
+        carBody.position.y = 0.4;
+        carBody.castShadow = true;
+        carGroup.add(carBody);
+
+        // Car Cabin
+        const carCabinGeometry = new THREE.BoxGeometry(0.8, 0.4, 1);
+        const carCabinMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        const carCabin = new THREE.Mesh(carCabinGeometry, carCabinMaterial);
+        carCabin.position.y = 0.8;
+        carCabin.position.z = -0.2;
+        carCabin.castShadow = true;
+        carGroup.add(carCabin);
+        
+        scene.add(carGroup);
+        carGroup.position.y = 0; // Car is at ground level
+
+        // --- Camera Setup ---
+        camera.position.set(0, 5, 7);
+        camera.lookAt(carGroup.position);
+
+        // --- Car Controls & State ---
+        const carState = {
+            speed: 0,
+            turnSpeed: 0,
+            maxSpeed: 0.2,
+            maxTurnSpeed: 0.03,
+            acceleration: 0.005,
+            deceleration: 0.01,
+            turnAcceleration: 0.001,
+            turnDeceleration: 0.002
+        };
+        const keysPressed = {};
+
+        // --- Event Listeners ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        document.addEventListener('keydown', (event) => { keysPressed[event.key.toLowerCase()] = true; });
+        document.addEventListener('keyup', (event) => { keysPressed[event.key.toLowerCase()] = false; });
+        
+        // Button controls
+        const controls = {
+            'forward-btn': { key: 'w' },
+            'backward-btn': { key: 's' },
+            'left-btn': { key: 'a' },
+            'right-btn': { key: 'd' }
+        };
+
+        for (const [btnId, mapping] of Object.entries(controls)) {
+            const btn = document.getElementById(btnId);
+            btn.addEventListener('mousedown', () => keysPressed[mapping.key] = true);
+            btn.addEventListener('mouseup', () => keysPressed[mapping.key] = false);
+            btn.addEventListener('mouseleave', () => keysPressed[mapping.key] = false);
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); keysPressed[mapping.key] = true; });
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); keysPressed[mapping.key] = false; });
+        }
+
+
+        // --- WebSocket Simulation ---
+        // In a real application, you would replace this simulation with a real WebSocket client.
+        // A Python script on your laptop would read data from the HC-05's serial port
+        // and broadcast it over a WebSocket server (e.g., ws://localhost:8765).
+        // This JavaScript would then connect to that server.
+        const connectionStatusEl = document.getElementById('connection-status');
+        
+        function setupWebSocket() {
+            // Example: const socket = new WebSocket('ws://localhost:8765');
+            // socket.onopen = () => { connectionStatusEl.textContent = 'Connected'; connectionStatusEl.className = 'text-green-400'; };
+            // socket.onmessage = (event) => { const data = JSON.parse(event.data); handleSensorData(data); };
+            // socket.onclose = () => { connectionStatusEl.textContent = 'Disconnected'; connectionStatusEl.className = 'text-red-400'; };
+            // socket.onerror = () => { connectionStatusEl.textContent = 'Error'; connectionStatusEl.className = 'text-red-400'; };
+            
+            // --- SIMULATION CODE START ---
+            connectionStatusEl.textContent = 'Connected (Simulated)';
+            connectionStatusEl.className = 'text-green-400';
+
+            setInterval(() => {
+                // Simulate receiving data from 3 ultrasonic sensors
+                const sensorData = [
+                    { angle: -30, distance: 20 + Math.random() * 80 }, // Left sensor
+                    { angle: 0, distance: 30 + Math.random() * 70 },   // Center sensor
+                    { angle: 30, distance: 20 + Math.random() * 80 }  // Right sensor
+                ];
+                
+                // Only add an obstacle randomly to avoid clutter
+                if (Math.random() < 0.1) {
+                    const randomSensor = sensorData[Math.floor(Math.random() * sensorData.length)];
+                    if (randomSensor.distance < 50) { // Only add if it's relatively close
+                       addObstacle(randomSensor.distance, randomSensor.angle);
+                    }
+                }
+            }, 200); // Simulate data every 200ms
+            // --- SIMULATION CODE END ---
+        }
+
+        function addObstacle(distance, angleDegrees) {
+            const angleRadians = (angleDegrees * Math.PI) / 180;
+            
+            // Calculate position relative to the car's current orientation
+            const relativeX = Math.sin(angleRadians + carGroup.rotation.y) * distance;
+            const relativeZ = Math.cos(angleRadians + carGroup.rotation.y) * distance;
+            
+            // Calculate absolute position in the world
+            const worldX = carGroup.position.x + relativeX;
+            const worldZ = carGroup.position.z + relativeZ;
+
+            const obstacleGeometry = new THREE.BoxGeometry(2, 4, 2);
+            const obstacleMaterial = new THREE.MeshStandardMaterial({ color: 0xff4757 });
+            const obstacle = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+            obstacle.position.set(worldX, 2, worldZ);
+            obstacle.castShadow = true;
+            obstacle.receiveShadow = true;
+            
+            scene.add(obstacle);
+            obstacles.push(obstacle);
+        }
+
+        // --- Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // --- Handle Movement Input ---
+            // Forward/Backward
+            if (keysPressed['w'] || keysPressed['arrowup']) {
+                carState.speed = Math.min(carState.maxSpeed, carState.speed + carState.acceleration);
+            } else if (keysPressed['s'] || keysPressed['arrowdown']) {
+                carState.speed = Math.max(-carState.maxSpeed / 2, carState.speed - carState.acceleration);
+            } else {
+                // Decelerate if no input
+                if (carState.speed > 0) carState.speed = Math.max(0, carState.speed - carState.deceleration);
+                if (carState.speed < 0) carState.speed = Math.min(0, carState.speed + carState.deceleration);
+            }
+
+            // Turning
+            if (keysPressed['a'] || keysPressed['arrowleft']) {
+                carState.turnSpeed = Math.min(carState.maxTurnSpeed, carState.turnSpeed + carState.turnAcceleration);
+            } else if (keysPressed['d'] || keysPressed['arrowright']) {
+                carState.turnSpeed = Math.max(-carState.maxTurnSpeed, carState.turnSpeed - carState.turnAcceleration);
+            } else {
+                // Decelerate turning
+                if (carState.turnSpeed > 0) carState.turnSpeed = Math.max(0, carState.turnSpeed - carState.turnDeceleration);
+                if (carState.turnSpeed < 0) carState.turnSpeed = Math.min(0, carState.turnSpeed + carState.turnDeceleration);
+            }
+            
+            // --- Update Car Position ---
+            // The car itself doesn't move forward in the scene. Instead, the world moves towards it.
+            // This keeps the car centered. However, we track its "virtual" position.
+            // We only apply rotation to the car model itself.
+            if (Math.abs(carState.speed) > 0.001) {
+                 carGroup.rotation.y -= carState.turnSpeed * (carState.speed > 0 ? 1 : -1); // Turn direction depends on forward/reverse
+            }
+            
+            const moveX = Math.sin(carGroup.rotation.y) * carState.speed;
+            const moveZ = Math.cos(carGroup.rotation.y) * carState.speed;
+
+            carGroup.position.x += moveX;
+            carGroup.position.z += moveZ;
+
+            // --- Update Camera ---
+            // The camera follows the car smoothly
+            const cameraOffset = new THREE.Vector3(0, 5, 7);
+            cameraOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), carGroup.rotation.y);
+            camera.position.lerp(carGroup.position.clone().add(cameraOffset), 0.1);
+            camera.lookAt(carGroup.position);
+
+            // --- Obstacle Management ---
+            // Remove obstacles that are far behind the car
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obstacle = obstacles[i];
+                const distance = obstacle.position.distanceTo(carGroup.position);
+                if (distance > 100) { // Cleanup distance
+                    scene.remove(obstacle);
+                    obstacles.splice(i, 1);
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // --- Start Everything ---
+        setupWebSocket();
+        animate();
+    </script>
+</body>
+</html>

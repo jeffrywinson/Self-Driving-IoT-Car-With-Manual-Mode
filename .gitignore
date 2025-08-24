@@ -1,0 +1,52 @@
+# General OS and Editor files
+.DS_Store
+Thumbs.db
+*.suo
+*.user
+*.userosscache
+*.sln
+*.tmp
+*.bak
+
+# VS Code specific
+.vscode/
+
+# Python virtual environment
+# This is the most important one for the Python part!
+.venv/
+venv/
+env/
+*.env
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PlatformIO specific
+# This ignores the massive build and library folder.
+.pio/
+
+# Ignore firmware binaries
+*.bin
+*.elf
